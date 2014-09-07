@@ -221,6 +221,48 @@ EOD;
 	} else
 		portal_reply_page($redirurl, "error", $errormsg);
 
+} else if (!$_POST['accept'] && $clientmac  && $cpcfg['auth_method'] == "nexudusspaces") {
+
+	//Login in by mac address
+	$response = nexudusspaces_backed("", "", "", $clientmac, $cpcfg['nexudusspaces_space'], $cpcfg['nexudusspaces_auth']);
+	if ($response['success']) {
+		captiveportal_logportalauth(null, $clientmac, $clientip, "LOGIN");
+		portal_allow($clientip, $clientmac, null, null, array('voucher' => 1, 'idle_timeout' => $idle_timeout, 'session_timeout' => intval($response['session_timeout'])));
+	} else  {
+		captiveportal_logportalauth($_POST['auth_user'], $clientmac, $clientip, "FAILURE");
+		portal_reply_page($redirurl, "error", $response['message']);
+	}
+	
+} else if ($_POST['accept'] && $cpcfg['auth_method'] == "nexudusspaces" && $_POST['auth_token']) {
+
+	//Login in by access token
+	if ($_POST['auth_token']) {
+		$response = nexudusspaces_backed("", "", $_POST['auth_token'], $clientmac, $cpcfg['nexudusspaces_space'], $cpcfg['nexudusspaces_auth']);
+		if ($response['success']) {
+		  captiveportal_logportalauth(null, $clientmac, $clientip, "LOGIN");
+		  portal_allow($clientip, $clientmac, null, null, array('voucher' => 1, 'idle_timeout' => $idle_timeout, 'session_timeout' => intval($response['session_timeout'])));
+		} else {
+		  captiveportal_logportalauth(null, $clientmac, $clientip, "FAILURE");
+		  portal_reply_page($redirurl, "error", $response['message']);
+		}
+	} else {
+		portal_reply_page($redirurl, "error", $errormsg);
+	}
+
+} else if ($_POST['accept'] && $cpcfg['auth_method'] == "nexudusspaces" && $_POST['auth_user']) {
+	//Login in by username and password
+	if ($_POST['auth_user'] && $_POST['auth_pass']) {
+		$response = nexudusspaces_backed($_POST['auth_user'], $_POST['auth_pass'], $_POST['auth_token'], $clientmac, $cpcfg['nexudusspaces_space'], $cpcfg['nexudusspaces_auth']);
+		if ($response['success']) {
+		  captiveportal_logportalauth($_POST['auth_user'], $clientmac, $clientip, "LOGIN");
+		  portal_allow($clientip, $clientmac, $_POST['auth_user'], null, array('voucher' => 1, 'idle_timeout' => $idle_timeout, 'session_timeout' => intval($response['session_timeout'])));
+		} else {
+		  captiveportal_logportalauth($_POST['auth_user'], $clientmac, $clientip, "FAILURE");
+		  portal_reply_page($redirurl, "error", $response['message']);
+		}
+	} else {
+		portal_reply_page($redirurl, "error", $errormsg);
+	}
 } else if ($_POST['accept'] && $clientip && $cpcfg['auth_method'] == "none") {
 	captiveportal_logportalauth("unauthenticated",$clientmac,$clientip,"ACCEPT");
 	portal_allow($clientip, $clientmac, "unauthenticated");

@@ -48,6 +48,9 @@
  */
 if(!$do_not_include_config_gui_inc)
 	require_once("config.gui.inc");
+	
+require_once('Requests/library/Requests.php');
+require_once('JSON.php');
 
 // Will be changed to false if security checks fail
 $security_passed = true;
@@ -1232,6 +1235,76 @@ function radius_backed($username, $passwd, $authcfg, &$attributes = array()) {
 	return $ret;
 }
 
+function nexudusspaces_backed($username, $passwd, $accesstoken, $mac, $space, $token) {
+  
+   Requests::register_autoloader();
+
+  if(!$space) {
+	return array(
+        'success' => false,
+        'message' => 'Captive Portal is not configured correctly. The Web address for your Nexudus Account is missing.'
+    );
+  }
+  if(!$token) {
+	return array(
+        'success' => false,
+        'message' => 'Captive Portal is not configured correctly. The Authentication token for your Nexudus Account is missing.'
+    );
+  }
+   
+  $url = 'https://' . $space . '.spaces.nexudus.com/api/public/checkin';
+  $data = array(
+		'email' => $username, 
+		'password' => $passwd, 
+		'mac' => $mac,
+		'token' => $accesstoken
+		);
+  $headers = array(
+	'Content-Type' => 'application/json; charset=utf-8',
+	'Authorization' => $token
+	);
+
+  try {
+    $json = new Services_JSON();
+	
+    $response = Requests::post($url, $headers, $json->encode($data));
+	header("Content-Type: text/html");
+	
+    $body = $json->decode($response->body);
+	
+	if($body->WasSuccessful) {
+		return array(
+		'success' => true,
+		'message' => $body->Message,
+		'session_timeout' => $body->Value->SessionTimeOut
+		);
+	} else if(!$body->WasSuccessful) {
+		return array(
+		'success' => false,
+		'message' => $body->Message
+		);
+	} else {
+		log_error('ERROR NEXUDUS SPACES: Invalid response from Nexudus Spaces Servers (' . $response->status_code . ', Error: ' . $response->body . ')');
+		return array(
+		'success' => false,
+		'message' => 'Nexudus Spaces servers returned an invalid response'
+		);
+	}
+	} catch(Exception $e) {
+		header("Content-Type: text/html");
+		log_error('ERROR NEXUDUS SPACES: Could not contact Nexudus Spaces Servers (' . $e . ')');
+		return array(
+		  'success' => false,
+		  'message' => 'Could not contact Nexudus Spaces Servers.'
+		);
+	}
+  
+	return array(
+	  'success' => true,
+	  'message' => 'Welcome to the Space'
+	);
+}
+
 function get_user_expiration_date($username) {
 	$user = getUserEntry($username);
 	if ($user['expires']) 
@@ -1327,6 +1400,10 @@ function authenticate_user($username, $password, $authcfg = NULL, &$attributes =
         case 'radius':
                 if (radius_backed($username, $password, $authcfg, $attributes))
                         $authenticated = true;
+                break;
+		case 'nexudusspaces':
+				if (nexudusspaces_backed($username, $password, $authcfg))
+					$authenticated = true;
                 break;
         default:
                 /* lookup user object by name */
